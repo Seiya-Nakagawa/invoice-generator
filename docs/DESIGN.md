@@ -17,15 +17,20 @@
 | `mail_invoice/main.gs` | エントリポイント関数とメイン処理ロジック |
 | `mail_invoice/config.gs` | メール・PDF 関連の設定値（定数） |
 
-## 3. 処理フロー
+### 3.1 `createNewMonthlySpreadsheet()` の流れ（月次トリガー）
 
-`mainProcessInvoice()` の流れ。
+1. 今日の日付から当月（1日〜末日）を判定し、ファイル名（例：「【請求書】〇〇_2024年4月分」）を決定する。
+2. 作成先フォルダ内に同名のファイルが既に存在する場合は、二重作成を避けるため処理を終了する。
+3. `TEMPLATE_SPREADSHEET_ID` で指定されたスプレッドシートファイルをコピーし、新しいファイル名を設定する。
+4. 作成されたファイルの URL 等をログに出力する。
+
+### 3.2 `mainProcessInvoice()` の流れ（手動実行）
 
 1. アクティブスプレッドシートとそのスプレッドシート ID を取得する。
 2. `getTargetYearMonth()` で対象年月を決定する。
 3. `{YEAR_MONTH}` を「YYYY年M月」に置換し、PDF ファイル名を組み立てる。
 4. スプレッドシートの親フォルダを `DriveApp.getFileById().getParents()` で取得する。親フォルダが存在しない場合はアラート表示して処理中断。
-5. `exportActiveSheetAsPDF()` を呼び出し、アクティブシートを PDF として親フォルダに保存する。失敗時はログを残して処理中断。
+5. アクティブなシート（または `TEMPLATE_SHEET_NAME` で指定されたシート）を PDF としてエクスポート（`exportSheetAsPDF`）し、親フォルダに保存する。失敗時はログを残して処理中断。
 6. 件名テンプレート・本文テンプレートの `{YEAR}` `{MONTH}` を置換し、本文末尾に署名テンプレートを連結する。
 7. `GmailApp.createDraft()` で宛先・件名・本文・PDF 添付を指定して下書きを作成する。
 8. 例外発生時は最上位の `try/catch` でログ出力＋アラート表示。
@@ -36,6 +41,12 @@
 
 - 種別: シンプルトリガ（スプレッドシートを開いた際に自動実行）。
 - 処理: メニュー「請求書処理」に「PDF作成＆Gmail下書き」項目を追加する。
+- 戻り値: なし。
+
+### 4.2 `createNewMonthlySpreadsheet()`
+
+- 種別: 時間主導型トリガ（毎月1日等）による自動実行を想定。
+- 処理: テンプレートスプレッドシートをコピーし、当月用の名前で新しいファイルを作成する。
 - 戻り値: なし。
 
 ### 4.2 `mainProcessInvoice()`
@@ -56,29 +67,29 @@
     3. `日付 > 15` ならそのまま当月。
     4. `getFullYear()` と `getMonth() + 1` を返す。
 
-### 4.4 `exportActiveSheetAsPDF(spreadsheet, folder, pdfFileName)`
+### 4.5 `exportSheetAsPDF(spreadsheet, sheet, folder, pdfFileName)`
 
 - 入力:
   - `spreadsheet` — 対象スプレッドシート。
+  - `sheet` — PDF 化するシートオブジェクト。
   - `folder` — 保存先 Google ドライブフォルダ。
   - `pdfFileName` — 保存ファイル名。
 - 出力: 作成された `File` オブジェクト（成功時）／ `null`（失敗時）。
 - 処理:
-
-    1. アクティブシートの `sheetId`（GID）を取得し、PDF エクスポート URL を組み立てる。
+    1. 指定された `sheet` の `sheetId`（GID）を取得し、PDF エクスポート URL を組み立てる。
     2. `ScriptApp.getOAuthToken()` で取得したアクセストークンを `Authorization` ヘッダに付けて `UrlFetchApp.fetch()` を実行（`muteHttpExceptions: true`）。
     3. HTTP 200 のとき、レスポンスの Blob にファイル名を設定し、`folder.createFile(blob)` で保存。
     4. 200 以外、または例外発生時はアラート表示し `null` を返す。
 
 ## 5. 設定項目（`config.gs`）
 
-| 定数 | 用途 | 置換変数 |
-| ---- | ---- | -------- |
+| `TEMPLATE_SPREADSHEET_ID` | 複製元のテンプレートスプレッドシートの ID | — |
+| `TEMPLATE_SHEET_NAME` | スプレッドシート内の処理対象シート名 | — |
 | `EMAIL_RECIPIENT` | Gmail 下書きの宛先メールアドレス | — |
 | `EMAIL_SUBJECT_TEMPLATE` | Gmail 下書きの件名テンプレート | `{YEAR}` `{MONTH}` |
 | `EMAIL_BODY_TEMPLATE` | Gmail 下書きの本文テンプレート（署名は別定数） | `{YEAR}` `{MONTH}` |
 | `EMAIL_SIGNATURE_TEMPLATE` | 本文末尾に連結する署名 | — |
-| `PDF_FILENAME_TEMPLATE_CONFIG` | 出力 PDF のファイル名テンプレート | `{YEAR_MONTH}`（「YYYY年M月」） |
+| `PDF_FILENAME_TEMPLATE_CONFIG` | 出力 PDF（および新規スプレッドシート）のファイル名テンプレート | `{YEAR_MONTH}`（「YYYY年M月」） |
 | `pdfOptions` | PDF エクスポート URL に付与するクエリ文字列 | — |
 
 `pdfOptions` の現行値は次のとおり。
