@@ -6,7 +6,7 @@ const TEMPLATE_SHEET_NAME = "請求書";
 // Gmail下書きの宛先
 const EMAIL_RECIPIENT = "XXXXXX@XXXX.XX.XX";
 // Gmail下書きの件名 ({YEAR}と{MONTH}が置換されます)
-const EMAIL_SUBJECT_TEMPLATE = "【請求書】〇〇社 {YEAR}年{MONTH}月分";
+const EMAIL_SUBJECT_TEMPLATE = "【請求書】テクノオネスティ {YEAR}年{MONTH}月分";
 // Gmail下書きの本文テンプレート ({YEAR}と{MONTH}が置換されます)
 const EMAIL_BODY_TEMPLATE =
   "株式会社 〇〇\n" +
