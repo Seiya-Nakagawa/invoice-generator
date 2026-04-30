@@ -1,6 +1,6 @@
 // --- 設定項目 ---
 // 複製元のテンプレートスプレッドシートの ID
-const TEMPLATE_SPREADSHEET_ID = "ここにテンプレートスプレッドシートのIDを入力してください";
+const TEMPLATE_SPREADSHEET_ID = "1OezeyXYFb7xiseSHHxFdr7AZ5LMinoy59kv34OFpVU4";
 // スプレッドシート内の処理対象シート名
 const TEMPLATE_SHEET_NAME = "請求書";
 // Gmail下書きの宛先
@@ -20,7 +20,7 @@ const EMAIL_BODY_TEMPLATE =
 const EMAIL_SIGNATURE_TEMPLATE =
   "=========================\n" +
   "株式会社 〇〇\n" +
-  "〇〇 〇〇（〇〇 〇〇）\n" + 
+  "〇〇 〇〇（〇〇 〇〇）\n" +
   "Email: XXXXXX@XXXX.XX.XX\n" +
   "========================="
 // ------------------------------------
