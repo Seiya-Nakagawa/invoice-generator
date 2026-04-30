@@ -1,4 +1,6 @@
 // --- 設定項目 ---
+// 当月分シートを複製する元のテンプレートシート名
+const TEMPLATE_SHEET_NAME = "請求書";
 // Gmail下書きの宛先
 const EMAIL_RECIPIENT = "XXXXXX@XXXX.XX.XX";
 // Gmail下書きの件名 ({YEAR}と{MONTH}が置換されます)
