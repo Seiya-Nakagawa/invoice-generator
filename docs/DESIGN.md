@@ -5,7 +5,7 @@
 - 実行環境: Google Apps Script（スプレッドシートにバインドされたコンテナ型スクリプト）。
 - 利用サービス:
   - `SpreadsheetApp` — アクティブスプレッドシート/シート取得、UI（メニュー・アラート）。
-  - `DriveApp` — スプレッドシートの親フォルダ取得、PDF ファイル作成。
+  - `DriveApp` — PDF ファイル作成と保存先フォルダ取得。
   - `UrlFetchApp` — Google スプレッドシートの PDF エクスポート URL を直接呼び出し。
   - `ScriptApp` — `UrlFetchApp` のリクエストに付与する OAuth トークン取得。
   - `GmailApp` — 下書きメール作成。
@@ -17,44 +17,41 @@
 | `mail_invoice/main.gs` | エントリポイント関数とメイン処理ロジック |
 | `mail_invoice/config.gs` | メール・PDF 関連の設定値（定数） |
 
-### 3.1 `createNewMonthlySpreadsheet()` の流れ（月次トリガー）
+### 3.1 `createNewMonthlySheet()` の流れ
 
-1. 今日の日付から当月（1日〜末日）を判定し、ファイル名（例：「【請求書】〇〇_2024年4月分」）を決定する。
-2. 作成先フォルダ内に同名のファイルが既に存在する場合は、二重作成を避けるため処理を終了する。
-3. `TEMPLATE_SPREADSHEET_ID` で指定されたスプレッドシートファイルをコピーし、新しいファイル名を設定する。
-4. 作成されたファイルの URL 等をログに出力する。
+1. 今日の日付から当月（1日〜末日）を判定し、シート名（例：「202404」）を決定する。
+2. スプレッドシート内に同名のシートが既に存在する場合は、二重作成を避けるためアラートを表示して終了する。
+3. `FORMAT_SHEET_NAME` で指定されたフォーマットシートをコピーし、新しいシート名を設定する。
+4. 作成されたシートの J13, J14 に月初・月末日を設定する。
 
 ### 3.2 `mainProcessInvoice()` の流れ（手動実行）
 
-1. アクティブスプレッドシートとそのスプレッドシート ID を取得する。
+1. アクティブスプレッドシートを取得する。
 2. `getTargetYearMonth()` で対象年月を決定する。
-3. `{YEAR_MONTH}` を「YYYY年M月」に置換し、PDF ファイル名を組み立てる。
-4. スプレッドシートの親フォルダを `DriveApp.getFileById().getParents()` で取得する。親フォルダが存在しない場合はアラート表示して処理中断。
-5. アクティブなシート（または `TEMPLATE_SHEET_NAME` で指定されたシート）を PDF としてエクスポート（`exportSheetAsPDF`）し、親フォルダに保存する。失敗時はログを残して処理中断。
-6. 件名テンプレート・本文テンプレートの `{YEAR}` `{MONTH}` を置換し、本文末尾に署名テンプレートを連結する。
-7. `GmailApp.createDraft()` で宛先・件名・本文・PDF 添付を指定して下書きを作成する。
-8. 例外発生時は最上位の `try/catch` でログ出力＋アラート表示。
+3. YYYYMM 形式のシート名を取得し、そのシートを検索する。
+4. スプレッドシートの親フォルダを取得する。
+5. 指定されたシートを PDF としてエクスポート（`exportSheetAsPDF`）し、親フォルダに保存する。失敗時はログを残して処理中断。
+6. PDF ファイルの共有 URL (`getUrl()`) を取得する。
+7. 下書きテンプレートの `{YEAR}` `{MONTH}` `{リンク}` を置換する。
+8. `GmailApp.createDraft()` で宛先・件名・本文（リンク含む）を指定して下書きを作成する。添付は行わない。
+9. 例外発生時は最上位の `try/catch` でログ出力＋アラート表示。
 
 ## 4. 関数仕様
 
 ### 4.1 `onOpen()`
 
-- 種別: シンプルトリガ（スプレッドシートを開いた際に自動実行）。
-- 処理: メニュー「請求書処理」に「PDF作成＆Gmail下書き」項目を追加する。
-- 戻り値: なし。
+- 種別: シンプルトリガ。
+- 処理: メニュー「請求書処理」に「当月シート作成」と「PDF作成＆Gmail下書き」項目を追加する。
 
-### 4.2 `createNewMonthlySpreadsheet()`
+### 4.2 `createNewMonthlySheet()`
 
-- 種別: 時間主導型トリガ（毎月1日等）による自動実行を想定。
-- 処理: テンプレートスプレッドシートをコピーし、当月用の名前で新しいファイルを作成する。
-- 戻り値: なし。
+- 種別: メニュー項目またはトリガ。
+- 処理: フォーマットシートをコピーし、当月用の名前で新しいシートを作成する。
 
-### 4.2 `mainProcessInvoice()`
+### 4.3 `mainProcessInvoice()`
 
-- 種別: メニュー項目から呼び出されるエントリ関数。
-- 処理: 「3. 処理フロー」のとおり、PDF 作成と Gmail 下書き作成を統括する。
-- 戻り値: なし（副作用としてドライブにファイル作成、Gmail に下書き作成）。
-- エラー処理: 全体を `try/catch` で包み、例外時はログ＋アラート。
+- 種別: メニュー項目。
+- 処理: PDF 作成と Drive 共有リンクを含む Gmail 下書き作成を統括する。
 
 ### 4.3 `getTargetYearMonth()`
 
@@ -83,13 +80,10 @@
 
 ## 5. 設定項目（`config.gs`）
 
-| `TEMPLATE_SPREADSHEET_ID` | 複製元のテンプレートスプレッドシートの ID | — |
-| `TEMPLATE_SHEET_NAME` | スプレッドシート内の処理対象シート名 | — |
-| `EMAIL_RECIPIENT` | Gmail 下書きの宛先メールアドレス | — |
+| `FORMAT_SHEET_NAME` | フォーマットシートの名前 | — |
+| `EMAIL_TEMPLATE_LABEL` | 本文の雛形として使用する「下書き」のラベル名 | — |
 | `EMAIL_SUBJECT_TEMPLATE` | Gmail 下書きの件名テンプレート | `{YEAR}` `{MONTH}` |
-| `EMAIL_BODY_TEMPLATE` | Gmail 下書きの本文テンプレート（署名は別定数） | `{YEAR}` `{MONTH}` |
-| `EMAIL_SIGNATURE_TEMPLATE` | 本文末尾に連結する署名 | — |
-| `PDF_FILENAME_TEMPLATE_CONFIG` | 出力 PDF（および新規スプレッドシート）のファイル名テンプレート | `{YEAR_MONTH}`（「YYYY年M月」） |
+| `PDF_FILENAME_TEMPLATE_CONFIG` | 出力 PDF のファイル名テンプレート | — |
 | `pdfOptions` | PDF エクスポート URL に付与するクエリ文字列 | — |
 
 `pdfOptions` の現行値は次のとおり。
