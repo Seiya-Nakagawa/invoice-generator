@@ -70,6 +70,7 @@ function createNewMonthlySheet() {
   } catch (e) {
     Logger.log(`createNewMonthlySheet でエラーが発生しました: ${e.toString()}`);
     showAlert(`エラー: ${e.toString()}`);
+    throw e; // エラーメールを飛ばすために再スロー
   }
 }
 
@@ -167,6 +168,7 @@ function mainProcessInvoice() {
     const errorMsg = `エラーが発生しました: ${e.toString()}`;
     Logger.log(errorMsg);
     showAlert(errorMsg);
+    throw e; // エラーメールを飛ばすために再スロー
   }
 }
 
@@ -186,10 +188,18 @@ function getTargetYearMonth() {
  * ユーザーへの通知（アラート）を表示します。
  */
 function showAlert(message) {
+  // まずログに出力（トリガー実行時でも確認可能にするため）
+  Logger.log(`[Alert Message] ${message}`);
+
   try {
-    SpreadsheetApp.getUi().alert(message);
+    // UIコンテキスト（スプレッドシートを開いている状態）でのみアラートを表示
+    const ui = SpreadsheetApp.getUi();
+    if (ui) {
+      ui.alert(message);
+    }
   } catch (e) {
-    Logger.log(`[Alert Message] ${message}`);
+    // トリガー実行時など、UIが利用できないコンテキストでは getUi() が例外を投げるため、
+    // ここでキャッチして何もしない（ログ出力は済んでいるため）
   }
 }
 
@@ -218,6 +228,6 @@ function exportSheetAsPDF(spreadsheet, sheet, folder, pdfFileName) {
   } catch (e) {
     Logger.log(`PDF作成エラー: ${e.toString()}`);
     showAlert(`PDF作成エラー: ${e.toString()}`);
-    return null;
+    throw e; // 上位の catch ブロックへ伝播させる
   }
 }
