@@ -1,0 +1,7 @@
+.antigravitycli
+
+# clasp の認証情報
+.clasprc.json
+
+# リポジトリ直下の .clasp.json は使用しない（取引先ごとに clients/ 配下で管理する）
+/.clasp.json
