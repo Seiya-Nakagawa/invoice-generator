@@ -16,19 +16,25 @@ function onOpen() {
 
 /**
  * 設定値のバリデーションを行います。
- * @param {string[]} keys チェックするプロパティキーのリスト
+ * @param {string[]} keys チェックする設定キーのリスト
  */
 function validateConfig(keys) {
+  // config.gs で定義した設定値をキー名で引けるようにする
+  const configValues = {
+    FORMAT_SHEET_NAME: FORMAT_SHEET_NAME,
+    EMAIL_SUBJECT_TEMPLATE: EMAIL_SUBJECT_TEMPLATE,
+    EMAIL_TEMPLATE_LABEL: EMAIL_TEMPLATE_LABEL,
+    INVOICE_DATE_CELL: INVOICE_DATE_CELL,
+    DUE_DATE_CELL: DUE_DATE_CELL
+  };
+
   const missing = keys.filter(key => {
-    try {
-      const val = eval(key);
-      return val === null || val === undefined || val === "";
-    } catch (e) {
-      return true;
-    }
+    const value = configValues[key];
+    return value === null || value === undefined || value === "";
   });
+
   if (missing.length > 0) {
-    throw new Error(`以下の設定が不足しています。config.gs を確認してください: ${missing.join(", ")}`);
+    throw new Error(`以下の設定が不足しています。スクリプトプロパティを確認してください: ${missing.join(", ")}`);
   }
 }
 
@@ -37,7 +43,7 @@ function validateConfig(keys) {
  */
 function createNewMonthlySheet() {
   try {
-    validateConfig(['FORMAT_SHEET_NAME']);
+    validateConfig(['FORMAT_SHEET_NAME', 'INVOICE_DATE_CELL', 'DUE_DATE_CELL']);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const today = new Date();
@@ -58,11 +64,11 @@ function createNewMonthlySheet() {
     const newSheet = formatSheet.copyTo(ss).setName(sheetName);
 
     // 日付の設定
-    const currentMonthLast = new Date(year, month, 0);
-    const nextMonthLast = new Date(year, month + 1, 0);
+    const thisMonthLast = new Date(year, month, 0);      // 当月末
+    const nextMonthLast = new Date(year, month + 1, 0);  // 翌月末
 
-    newSheet.getRange("J13").setValue(Utilities.formatDate(currentMonthLast, Session.getScriptTimeZone(), "yyyy/MM/dd"));
-    newSheet.getRange("J14").setValue(Utilities.formatDate(nextMonthLast, Session.getScriptTimeZone(), "yyyy/MM/dd"));
+    newSheet.getRange(INVOICE_DATE_CELL).setValue(Utilities.formatDate(thisMonthLast, Session.getScriptTimeZone(), "yyyy/MM/dd"));
+    newSheet.getRange(DUE_DATE_CELL).setValue(Utilities.formatDate(nextMonthLast, Session.getScriptTimeZone(), "yyyy/MM/dd"));
 
     Logger.log(`新しいシートを作成しました: ${sheetName}`);
     showAlert(`新しいシート「${sheetName}」を作成しました。`);
@@ -113,16 +119,16 @@ function mainProcessInvoice() {
     // 4. PDF作成
     Logger.log(`${year}年${month}月分のPDFを作成中...`);
 
-    // 同名の既存ファイルをゴミ箱へ（重複防止とリンクの混乱回避）
+    // 同名の既存ファイルがある場合は、既存の請求書リンクが変わることを避けるため
+    // 上書きせずスキップする
     const existingFiles = folder.getFilesByName(pdfFileName);
-    while (existingFiles.hasNext()) {
-      const file = existingFiles.next();
-      Logger.log(`既存のファイルをゴミ箱に移動しました: ${file.getName()}`);
-      file.setTrashed(true);
+    if (existingFiles.hasNext()) {
+      Logger.log(`既に同名のファイルが存在するためスキップします: ${pdfFileName}`);
+      showAlert(`既に「${pdfFileName}」が存在するため、処理をスキップしました。`);
+      return;
     }
 
     const pdfFile = exportSheetAsPDF(ss, targetSheet, folder, pdfFileName);
-    if (!pdfFile) return;
 
     // 共有リンクの取得
     const driveLink = pdfFile.getUrl();
@@ -227,7 +233,6 @@ function exportSheetAsPDF(spreadsheet, sheet, folder, pdfFileName) {
     }
   } catch (e) {
     Logger.log(`PDF作成エラー: ${e.toString()}`);
-    showAlert(`PDF作成エラー: ${e.toString()}`);
     throw e; // 上位の catch ブロックへ伝播させる
   }
 }
